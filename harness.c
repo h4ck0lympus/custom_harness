@@ -1,4 +1,5 @@
 #include "civetweb.h"
+#include <stdlib.h>
 #include <pthread.h>
 #include <string.h>
 #include <stdint.h>
@@ -71,7 +72,12 @@ static int send_chunk(const uint8_t *data, size_t size) {
     char buf[1024];
 
     // recv data but don't do anything
-    while (recv(sock, buf, sizeof(buf), 0) > 0) {}
+    //  This can result in a deadlock..
+    // Ideally, we do want to wait for the program to exit/finish
+   // processing our input, otherwise we might not match the coverage to
+   // inputs correctly
+
+   //while (recv(sock, buf, sizeof(buf), 0) > 0) {}
     shutdown(sock, SHUT_RDWR); // close read write required ...
     close(sock);
     return 0;
@@ -80,7 +86,7 @@ static int send_chunk(const uint8_t *data, size_t size) {
 struct ThreadArgs {
     const uint8_t *data;
     size_t len;
-};
+} typedef ThreadArgs;
 
 static void* fuzz_thread(void *arg) {
     ThreadArgs *t = (ThreadArgs*)arg;
@@ -88,11 +94,11 @@ static void* fuzz_thread(void *arg) {
     return NULL;
 }
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+int LLVMFuzzerTestOneInput(const char *data, size_t size) {
     if (size < 4) return 0;
     // if calling for the first time, initialize civet web
     if (call_count == 0) civetweb_init();
-    call_count++;
+    call_count = 1;
 
     // divide data into 4 chunks, each thread gets equal amount of data
     size_t chunkSize = size / 4;
@@ -101,11 +107,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
     for (int i = 0; i < 4; i++) {
         ta[i].data = data + i * chunkSize;
-        if (i == 3) {
-            ta[i].len = (size - 3) * chunkSize;
-        } else {
-            ta[i].len = chunkSize;
-        }
+        ta[i].len = chunkSize;
         pthread_create(&thr[i], NULL, fuzz_thread, &ta[i]);
     }
 
