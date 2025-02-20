@@ -106,7 +106,7 @@ int LLVMFuzzerTestOneInput(const char *data, size_t size) {
     ThreadArgs ta[4];
 
     for (int i = 0; i < 4; i++) {
-        ta[i].data = data + i * chunkSize;
+        ta[i].data = (const uint8_t*) data + (i * chunkSize);
         ta[i].len = chunkSize;
         pthread_create(&thr[i], NULL, fuzz_thread, &ta[i]);
     }
